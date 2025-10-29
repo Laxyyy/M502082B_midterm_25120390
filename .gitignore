@@ -1,0 +1,20 @@
+# PyTorch files
+*.pt
+*.pth
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Test caches
+.pytest_cache/
+
+# Log files
+*.csv
+*.log
+
+# Data files - often excluded if large
+# data/
+
+# OS generated files
+.DS_Store
