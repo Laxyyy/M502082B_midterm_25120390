@@ -35,7 +35,8 @@ def train(
     epochs: int = 1, 
     batch_size: int = 32, 
     block_size: int = 128, 
-    lr: float = 1e-3, 
+    lr: float = 1e-3,
+    grad_clip: float = 1.0,
     eval_interval: int = 200, 
     eval_iters: int = 20, 
     log_path: str = None, 
@@ -44,7 +45,8 @@ def train(
     dynamic_dropout_patience: int = 5, 
     dynamic_dropout_factor: float = 0.5,
     early_stop_threshold: Optional[float] = None,
-    early_stop_stability_steps: int = 0
+    early_stop_stability_steps: int = 0,
+    checkpoint_path: Optional[str] = None
 ):
 	"""Minimal train loop.
 
@@ -53,8 +55,11 @@ def train(
 	"""
 	model.to(device)
 	optimizer = optim.AdamW(model.parameters(), lr=lr)
+	# Add a learning rate scheduler
+	scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps if max_steps is not None else 10000, eta_min=lr/10)
 	loss_f = nn.CrossEntropyLoss()
 	steps = 0
+	best_val_loss = float('inf')
 	
 	# early stopping state
 	early_stop_monitoring_start_step = None
@@ -71,7 +76,7 @@ def train(
 		csv_file = open(log_path, "a", buffering=1)
 		csv_writer = csv.writer(csv_file)
 		if write_header:
-			csv_writer.writerow(["step", "train_loss", "val_loss", "timestamp"])
+			csv_writer.writerow(["step", "train_loss", "val_loss", "lr", "timestamp"])
 	
 	training_stopped = False
 	for epoch in range(epochs):
@@ -87,7 +92,12 @@ def train(
 			B, T, C = logits.shape
 			loss = loss_f(logits.view(B*T, C), y.view(B*T))
 			loss.backward()
+			# Clip gradients
+			if grad_clip > 0:
+				torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 			optimizer.step()
+			# Step the scheduler
+			scheduler.step()
 			steps += 1
 
 			if max_steps is not None and steps >= max_steps:
@@ -97,9 +107,16 @@ def train(
 
 			if steps % eval_interval == 0:
 				val_loss = estimate_loss(model, data_ids, eval_iters, batch_size, block_size, device)
-				print(f"step {steps}: train loss {loss.item():.4f}, val loss {val_loss:.4f}")
+				current_lr = scheduler.get_last_lr()[0]
+				print(f"step {steps}: train loss {loss.item():.4f}, val loss {val_loss:.4f}, lr: {current_lr:.6f}")
 				if log_path is not None:
-					csv_writer.writerow([steps, f"{loss.item():.6f}", f"{val_loss:.6f}", time.time()])
+					csv_writer.writerow([steps, f"{loss.item():.6f}", f"{val_loss:.6f}", f"{current_lr:.6f}", time.time()])
+				
+				# Save the model if it has the best validation loss so far.
+				if checkpoint_path is not None and val_loss < best_val_loss:
+					best_val_loss = val_loss
+					save_checkpoint(checkpoint_path, model, optimizer)
+					print(f"Saved new best model to {checkpoint_path} with val_loss: {val_loss:.4f}")
 				
 				# Conditional activation for dynamic dropout
 				if dropout_adj_threshold is not None and not dropout_adj_activated:

@@ -1,108 +1,77 @@
-### 步骤 1: 导入必要的库
-我们需要导入一些基本的库来处理数据和构建模型。通常我们会使用 `numpy` 和 `torch`（PyTorch）来实现这些功能。
+# Tiny Shakespeare Transformer
 
-### 步骤 2: 实现位置编码（Positional Encoding）
-位置编码用于给定序列中每个位置的唯一表示。我们将实现一个函数来生成位置编码。
+This project is an implementation of a Transformer model from scratch using PyTorch, designed for character-level language modeling on the Tiny Shakespeare dataset. It serves as a hands-on assignment to understand and build the core components of the Transformer architecture as described in the paper "Attention Is All You Need".
 
-### 步骤 3: 实现多头自注意力（Multi-Head Self-Attention）
-我们将实现多头自注意力机制，包括查询（Q）、键（K）、值（V）的计算，以及注意力权重的计算。
+## Project Structure
 
-### 步骤 4: 实现位置前馈网络（Position-wise Feed-Forward Network）
-位置前馈网络通常由两个线性变换和一个激活函数组成。
-
-### 步骤 5: 实现残差连接和层归一化（Residual Connection + LayerNorm）
-我们将实现一个函数来处理残差连接和层归一化。
-
-### 步骤 6: 整合所有组件
-最后，我们将把所有组件整合到一个模块中，以便于后续使用。
-
-### 具体实现
-
-#### 步骤 1: 导入必要的库
-```python
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+```
+.
+├───data/
+│   └───input.txt         # Tiny Shakespeare dataset
+├───results/
+│   ├───training_log.csv
+│   └───*.png             # Output plots
+├───scripts/
+│   ├───run.sh            # Main execution script
+│   └───plot_results.py   # Script to plot training curves
+├───src/
+│   ├───attention.py      # Multi-head self-attention module
+│   ├───model.py          # Transformer model definition
+│   ├───training.py       # Training loop and utilities
+│   └───...               # Other modules (FFN, positional encoding, etc.)
+├───run_train.py          # Main script to start training
+└───requirements.txt      # Project dependencies
 ```
 
-#### 步骤 2: 实现位置编码
-```python
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.encoding = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(np.log(10000.0) / d_model))
-        self.encoding[:, 0::2] = torch.sin(position * div_term)
-        self.encoding[:, 1::2] = torch.cos(position * div_term)
-        self.encoding = self.encoding.unsqueeze(0)  # Add batch dimension
+## Features Implemented
 
-    def forward(self, x):
-        return x + self.encoding[:, :x.size(1)]
+- **Multi-Head Self-Attention**: Core attention mechanism.
+- **Positional Encoding**: Sinusoidal positional encodings to inject sequence order.
+- **Position-wise Feed-Forward Networks**: Applied independently at each position.
+- **Residual Connections & Layer Normalization**: For stabilizing deep networks.
+- **Encoder-Only Transformer**: A complete model assembled from the above components.
+- **Detailed Training Loop**: Includes validation, checkpointing, and logging.
+- **Advanced Training Techniques**:
+  - **AdamW Optimizer**: A robust optimization algorithm.
+  - **Gradient Clipping**: Prevents exploding gradients.
+  - **Cosine Annealing Learning Rate Scheduler**: For smoother convergence.
+- **Result Visualization**: Scripts to plot training and validation loss curves.
+
+## Setup and Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <your-repo-link>
+    cd tiny-shakespeare-transformer
+    ```
+
+2.  **Create a virtual environment (recommended):**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+## How to Run
+
+### Reproduce Training
+
+To run the training and reproduce the results, simply execute the provided shell script. This script will train the model with the default configuration specified in `run_train.py` and save the training log and loss curves to the `results/` directory.
+
+```bash
+bash scripts/run.sh
 ```
 
-#### 步骤 3: 实现多头自注意力
-```python
-class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        super(MultiHeadSelfAttention, self).__init__()
-        self.num_heads = num_heads
-        self.d_model = d_model
-        self.depth = d_model // num_heads
+The script uses a fixed random seed (`1337`) to ensure reproducibility.
 
-        self.wq = nn.Linear(d_model, d_model)
-        self.wk = nn.Linear(d_model, d_model)
-        self.wv = nn.Linear(d_model, d_model)
-        self.dense = nn.Linear(d_model, d_model)
+### Plotting Results
 
-    def split_heads(self, x, batch_size):
-        x = x.view(batch_size, -1, self.num_heads, self.depth)
-        return x.permute(0, 2, 1, 3)
+If you have a `training_log.csv` file (either from running the training or from your own experiments), you can generate the loss curve plots by running:
 
-    def forward(self, x):
-        batch_size = x.size(0)
-
-        q = self.split_heads(self.wq(x), batch_size)
-        k = self.split_heads(self.wk(x), batch_size)
-        v = self.split_heads(self.wv(x), batch_size)
-
-        # Scaled dot-product attention
-        scaled_attention_logits = torch.matmul(q, k.transpose(-2, -1)) / np.sqrt(self.depth)
-        attention_weights = F.softmax(scaled_attention_logits, dim=-1)
-        output = torch.matmul(attention_weights, v)
-
-        output = output.permute(0, 2, 1, 3).contiguous().view(batch_size, -1, self.d_model)
-        return self.dense(output)
+```bash
+python scripts/plot_results.py
 ```
-
-#### 步骤 4: 实现位置前馈网络
-```python
-class PositionwiseFeedForward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.1):
-        super(PositionwiseFeedForward, self).__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ff, d_model)
-
-    def forward(self, x):
-        return self.linear2(self.dropout(F.relu(self.linear1(x))))
-```
-
-#### 步骤 5: 实现残差连接和层归一化
-```python
-class ResidualLayerNorm(nn.Module):
-    def __init__(self, size, dropout=0.1):
-        super(ResidualLayerNorm, self).__init__()
-        self.norm = nn.LayerNorm(size)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x, sublayer):
-        return x + self.dropout(sublayer(self.norm(x)))
-```
-
-#### 步骤 6: 整合所有组件
-在这一部分，我们将创建一个完整的模型，整合上述所有组件。
-
-### 下一步
-请确认以上步骤和代码是否符合你的要求，或者你是否有任何特定的修改建议。完成这些后，我们可以继续整合这些组件到一个完整的模型中。

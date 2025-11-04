@@ -11,7 +11,7 @@ import torch
 
 from src.model import TransformerModel
 from src.config import TransformerConfig
-from src.training import train
+from src.training import train, load_checkpoint
 from src.utils import build_vocab, encode
 
 
@@ -34,6 +34,14 @@ def main():
 
     model = TransformerModel(vocab_size=cfg.vocab_size, embed_dim=cfg.embed_dim, num_heads=cfg.num_heads, ff_dim=cfg.ff_dim, num_layers=cfg.num_layers, max_len=cfg.max_len, dropout=cfg.dropout, causal=cfg.causal)
 
+    checkpoint_path = os.path.join(ROOT, "results", "best_model.pt")
+    if os.path.exists(checkpoint_path):
+        print(f"Loading model from checkpoint: {checkpoint_path}")
+        load_checkpoint(checkpoint_path, model, device=device)
+
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Model has {num_params/1e6:.2f}M parameters")
+
     print("Model instantiated. Running short training...")
     # run a very short training to validate pipeline
     train(
@@ -46,9 +54,11 @@ def main():
         lr=1e-3, 
         eval_interval=50, 
         eval_iters=10,
-        max_steps=150000,
+        max_steps=80000,
         early_stop_threshold=0.035,
-        early_stop_stability_steps=5000
+        early_stop_stability_steps=5000,
+        log_path=os.path.join(ROOT, "results", "training_log.csv"),
+        checkpoint_path=os.path.join(ROOT, "results", "best_model.pt")
     )
 
 
