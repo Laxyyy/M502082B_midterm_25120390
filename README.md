@@ -1,77 +1,93 @@
-# Tiny Shakespeare Transformer
+# Transformer from Scratch for Language Modeling
 
-This project is an implementation of a Transformer model from scratch using PyTorch, designed for character-level language modeling on the Tiny Shakespeare dataset. It serves as a hands-on assignment to understand and build the core components of the Transformer architecture as described in the paper "Attention Is All You Need".
+This project is a from-scratch implementation of an Encoder-only Transformer model in PyTorch, as described in the paper "Attention Is All You Need" by Vaswani et al. (2017).
+
+The primary goal is to build a deep understanding of the Transformer architecture by implementing its core components, including:
+- Multi-Head Self-Attention
+- Position-wise Feed-Forward Networks
+- Residual Connections and Layer Normalization
+- Sinusoidal Positional Encoding
+
+The model is trained on the `Tiny Shakespeare` dataset for a character-level language modeling task. The project also includes a comprehensive set of ablation studies to analyze the contribution of each core component to the model's performance.
 
 ## Project Structure
-
 ```
 .
 ├───data/
-│   └───input.txt         # Tiny Shakespeare dataset
+│   └───input.txt
 ├───results/
-│   ├───training_log.csv
-│   └───*.png             # Output plots
+│   ├───baseline/
+│   ├───ablation_no_pe/
+│   │   ... (other experiment results)
+│   └───ablation_comparison.png
 ├───scripts/
-│   ├───run.sh            # Main execution script
-│   └───plot_results.py   # Script to plot training curves
+│   ├───run_ablations.sh
+│   └───plot_ablation_results.py
 ├───src/
-│   ├───attention.py      # Multi-head self-attention module
-│   ├───model.py          # Transformer model definition
-│   ├───training.py       # Training loop and utilities
-│   └───...               # Other modules (FFN, positional encoding, etc.)
-├───run_train.py          # Main script to start training
-└───requirements.txt      # Project dependencies
+│   ├───attention.py
+│   ├───model.py
+│   └───... (other source files)
+├───run_train.py
+└───README.md
 ```
 
-## Features Implemented
+## Setup
 
-- **Multi-Head Self-Attention**: Core attention mechanism.
-- **Positional Encoding**: Sinusoidal positional encodings to inject sequence order.
-- **Position-wise Feed-Forward Networks**: Applied independently at each position.
-- **Residual Connections & Layer Normalization**: For stabilizing deep networks.
-- **Encoder-Only Transformer**: A complete model assembled from the above components.
-- **Detailed Training Loop**: Includes validation, checkpointing, and logging.
-- **Advanced Training Techniques**:
-  - **AdamW Optimizer**: A robust optimization algorithm.
-  - **Gradient Clipping**: Prevents exploding gradients.
-  - **Cosine Annealing Learning Rate Scheduler**: For smoother convergence.
-- **Result Visualization**: Scripts to plot training and validation loss curves.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Laxyyy/M502082B_midterm_25120390.git
+   cd M502082B_midterm_25120390
+   ```
 
-## Setup and Installation
+2. Install the required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-link>
-    cd tiny-shakespeare-transformer
-    ```
+## Reproducing the Experiments
 
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+The main results from the report can be reproduced in two simple steps.
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Step 1: Run All Training Experiments
 
-## How to Run
-
-### Reproduce Training
-
-To run the training and reproduce the results, simply execute the provided shell script. This script will train the model with the default configuration specified in `run_train.py` and save the training log and loss curves to the `results/` directory.
+This single command will execute the baseline training and all four ablation studies sequentially. Each experiment's results (logs, checkpoints) will be saved to a separate directory inside `results/`.
 
 ```bash
-bash scripts/run.sh
+bash scripts/run_ablations.sh
+```
+**Note:** This process involves training five models and will take a significant amount of time to complete.
+
+### Step 2: Generate the Final Comparison Plot
+
+After all training runs are complete, execute the following script. It will read the training logs from all experiment directories and generate the final comparison graph `ablation_comparison.png` in the `results/` directory.
+
+```bash
+python scripts/plot_ablation_results.py
 ```
 
-The script uses a fixed random seed (`1337`) to ensure reproducibility.
+## Ablation Study Results
 
-### Plotting Results
+The following plot shows the validation loss comparison between the baseline model and the four ablation experiments, demonstrating the importance of each core Transformer component.
 
-If you have a `training_log.csv` file (either from running the training or from your own experiments), you can generate the loss curve plots by running:
+![Ablation Study Results](results/ablation_comparison.png)
+
+## Advanced: Running a Single Custom Experiment
+
+If you wish to run a single experiment with a custom configuration, you can use the `run_train.py` script directly with its command-line arguments.
 
 ```bash
-python scripts/plot_results.py
+python run_train.py [OPTIONS]
+```
+
+**Available Options:**
+
+- `--results_dir <path>`: Directory to save results (default: `results`).
+- `--num_heads <int>`: Number of attention heads (default: `4`).
+- `--ablation_no_pe`: Flag to disable positional encoding.
+- `--ablation_no_residual`: Flag to disable residual connections.
+- `--ablation_no_layernorm`: Flag to disable layer normalization.
+
+**Example:** Run a single-head attention model and save results to `results/my_experiment`.
+```bash
+python run_train.py --num_heads 1 --results_dir results/my_experiment
 ```
