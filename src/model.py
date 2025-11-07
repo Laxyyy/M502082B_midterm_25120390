@@ -31,23 +31,31 @@ from typing import Optional
 class TransformerBlock(nn.Module):
 	"""Single Transformer block: attention -> add&norm -> ffn -> add&norm"""
 
-	def __init__(self, embed_dim: int, num_heads: int, ff_dim: int, dropout: float = 0.1, causal: bool = False):
+	def __init__(self, embed_dim: int, num_heads: int, ff_dim: int, dropout: float = 0.1, causal: bool = False,
+				 ablation_no_residual: bool = False, ablation_no_layernorm: bool = False):
 		super().__init__()
 		self.attn = MultiHeadSelfAttention(embed_dim, num_heads, dropout=dropout, causal=causal)
-		self.ln1 = nn.LayerNorm(embed_dim)
+		self.ln1 = nn.LayerNorm(embed_dim) if not ablation_no_layernorm else nn.Identity()
 		self.ffn = PositionwiseFFN(embed_dim, ff_dim, dropout=dropout, activation="gelu")
-		self.ln2 = nn.LayerNorm(embed_dim)
+		self.ln2 = nn.LayerNorm(embed_dim) if not ablation_no_layernorm else nn.Identity()
 		self.dropout = nn.Dropout(dropout)
+		self.ablation_no_residual = ablation_no_residual
 
 	def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
 		# attention sublayer
 		attn_out = self.attn(x, mask=mask)
-		x = x + self.dropout(attn_out)
+		if self.ablation_no_residual:
+			x = self.dropout(attn_out)
+		else:
+			x = x + self.dropout(attn_out)
 		x = self.ln1(x)
 
 		# ffn sublayer
 		ffn_out = self.ffn(x)
-		x = x + self.dropout(ffn_out)
+		if self.ablation_no_residual:
+			x = self.dropout(ffn_out)
+		else:
+			x = x + self.dropout(ffn_out)
 		x = self.ln2(x)
 		return x
 
@@ -55,21 +63,26 @@ class TransformerBlock(nn.Module):
 class TransformerModel(nn.Module):
 	"""Minimal transformer for language modeling over characters/tokens."""
 
-	def __init__(self, vocab_size: int, embed_dim: int, num_heads: int, ff_dim: int, num_layers: int, max_len: int = 1024, dropout: float = 0.1, causal: bool = True):
+	def __init__(self, vocab_size: int, embed_dim: int, num_heads: int, ff_dim: int, num_layers: int, max_len: int = 1024, dropout: float = 0.1, causal: bool = True,
+				 ablation_no_pe: bool = False, ablation_no_residual: bool = False, ablation_no_layernorm: bool = False):
 		super().__init__()
 		self.token_emb = nn.Embedding(vocab_size, embed_dim)
 		self.pos_enc = SinusoidalPositionalEncoding(embed_dim, max_len=max_len)
 		self.layers = nn.ModuleList([
-			TransformerBlock(embed_dim, num_heads, ff_dim, dropout=dropout, causal=causal)
+			TransformerBlock(embed_dim, num_heads, ff_dim, dropout=dropout, causal=causal,
+						   ablation_no_residual=ablation_no_residual,
+						   ablation_no_layernorm=ablation_no_layernorm)
 			for _ in range(num_layers)
 		])
 		self.ln_f = nn.LayerNorm(embed_dim)
 		self.head = nn.Linear(embed_dim, vocab_size, bias=False)
+		self.ablation_no_pe = ablation_no_pe
 
 	def forward(self, idx: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
 		# idx: (B, T)
 		x = self.token_emb(idx) * (self.token_emb.embedding_dim ** 0.5)
-		x = self.pos_enc(x)
+		if not self.ablation_no_pe:
+			x = self.pos_enc(x)
 		for layer in self.layers:
 			x = layer(x, mask=mask)
 		x = self.ln_f(x)
